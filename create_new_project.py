@@ -19,6 +19,7 @@ from __future__ import annotations
 import pathlib
 import shutil
 import sys
+import subprocess
 
 
 def _replace_in_file(file_path: pathlib.Path, old: str, new: str) -> None:
@@ -83,6 +84,27 @@ def main() -> None:
             _replace_in_file(file_path, old_pkg, new_name)
 
     print(f"Project successfully renamed to '{new_name}'.")
+
+    # ---------------------------------------------------------------------
+    # Create a virtual environment and install the project in editable mode.
+    # ---------------------------------------------------------------------
+    venv_path = root / ".venv"
+    if not venv_path.exists():
+        print("Creating virtual environment...")
+        try:
+            subprocess.run([sys.executable, "-m", "venv", str(venv_path)], check=True)
+        except subprocess.CalledProcessError as exc:  # pragma: no cover
+            print(f"Failed to create virtual environment: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+    # Use the venv's python executable to install the package.
+    venv_python = venv_path / "bin" / "python"
+    print("Installing project in editable mode...")
+    try:
+        subprocess.run([str(venv_python), "-m", "pip", "install", "-e", "."], cwd=str(root), check=True)
+    except subprocess.CalledProcessError as exc:  # pragma: no cover
+        print(f"Failed to install project: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
