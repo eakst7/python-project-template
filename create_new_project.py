@@ -62,6 +62,23 @@ def main() -> None:
 
     _remove_git_dir(root)
 
+    _initialize_git_repo(root, new_name)
+
+    _delete_self_script()
+
+def _delete_self_script() -> None:
+    """Delete the bootstrap script itself.
+
+    This is performed as the very last step so that the script can finish
+    execution before the file is removed. Any failure is reported but does not
+    abort the process.
+    """
+    script_path = pathlib.Path(__file__)
+    try:
+        script_path.unlink()
+    except OSError as exc:  # pragma: no cover
+        print(f"Failed to delete bootstrap script {script_path}: {exc}", file=sys.stderr)
+
 
 def _prompt_project_name() -> str:
     """Prompt the user for a new project name and return the stripped value."""
@@ -152,6 +169,46 @@ def _remove_git_dir(root: pathlib.Path) -> None:
             shutil.rmtree(git_dir)
         except OSError as exc:  # pragma: no cover
             print(f"Failed to remove .git directory: {exc}", file=sys.stderr)
+
+
+def _initialize_git_repo(root: pathlib.Path, project_name: str) -> None:
+    """Create a fresh git repository and commit all files except this script.
+
+    The commit message follows the required format:
+    ``New project '<project_name>'``.
+    """
+    # Initialise repository
+    try:
+        subprocess.run(["git", "init"], cwd=str(root), check=True,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError as exc:  # pragma: no cover
+        print(f"Failed to initialise git repository: {exc}", file=sys.stderr)
+        return
+
+    # Stage all files
+    try:
+        subprocess.run(["git", "add", "."], cwd=str(root), check=True,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError as exc:  # pragma: no cover
+        print(f"Failed to add files to git: {exc}", file=sys.stderr)
+        return
+
+    # Unstage this bootstrap script so it is not committed
+    script_name = pathlib.Path(__file__).name
+    try:
+        subprocess.run(["git", "reset", script_name], cwd=str(root), check=True,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError as exc:  # pragma: no cover
+        # If the script was not staged for some reason, continue anyway.
+        print(f"Failed to unstage bootstrap script: {exc}", file=sys.stderr)
+
+    # Commit with the required message
+    commit_msg = f"New project '{project_name}'"
+    try:
+        subprocess.run(["git", "commit", "-m", commit_msg], cwd=str(root), check=True,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError as exc:  # pragma: no cover
+        print(f"Failed to commit initial project files: {exc}", file=sys.stderr)
 
 
 if __name__ == "__main__":
